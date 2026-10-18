@@ -37,6 +37,7 @@ AFRAME.registerComponent('vr-trainer', {
     document.querySelector('#vr-vstock-btn').addEventListener('click',()=>{this.vstock=!this.vstock;this.refreshSettings();});
     document.querySelector('#vr-sound-btn').addEventListener('click',()=>{this.sound=!this.sound;this.refreshSettings();});
     for (const [hand,controller] of Object.entries(this.controllers)) controller.addEventListener('triggerdown',()=>this.fire(hand));
+    this.el.sceneEl.addEventListener('loaded',()=>{for(const controller of Object.values(this.controllers))controller.setAttribute('tracked-controls-webxr','space: targetRaySpace');},{once:true});
     this.el.sceneEl.addEventListener('enter-vr',()=>{this.status.textContent='In VR: point the carbine at a target and pull the selected controller trigger. Open MENU for settings.';});
     this.el.sceneEl.addEventListener('exit-vr',()=>{this.status.textContent='Desktop: use the mouse. VR: point the selected hand and pull its trigger.';});
     this.refreshSettings();
@@ -65,7 +66,7 @@ AFRAME.registerComponent('vr-trainer', {
   <a-plane position="0 0 -4" rotation="-90 0 0" width="200" height="200" color="#182333"></a-plane>
   <a-entity position="0 1.6 0">
     <a-camera wasd-controls-enabled="false"><a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity></a-camera>
-    <a-entity id="controller-right" laser-controls="hand: right" tracked-controls-webxr="space: targetRaySpace" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+    <a-entity id="controller-right" laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
       <a-entity id="gun-right-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
         <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
         <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
@@ -96,7 +97,7 @@ AFRAME.registerComponent('vr-trainer', {
       <a-entity id="gun-right-compact" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .316"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
       <a-entity id="muzzle-right" position="0 0 -.62"><a-sphere id="flash-right" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-right" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
     </a-entity>
-    <a-entity id="controller-left" laser-controls="hand: left" tracked-controls-webxr="space: targetRaySpace" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+    <a-entity id="controller-left" laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
       <a-entity id="gun-left-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
         <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
         <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
