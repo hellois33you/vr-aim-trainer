@@ -8,6 +8,13 @@
 :root{color-scheme:dark}html,body{margin:0;font-family:system-ui,sans-serif;background:#10141d;color:#edf3fa}#panel{position:fixed;z-index:5;left:50%;top:14px;transform:translateX(-50%);width:min(500px,94vw);text-align:center;background:#151d2bea;border:1px solid #40506a;border-radius:16px;padding:14px;box-sizing:border-box}h1{font-size:1.3rem;margin:0 0 5px}p{margin:5px 0 10px;color:#b3c0d2;font-size:.88rem;line-height:1.35}.row{display:flex;justify-content:center;gap:16px;margin:9px 0;font-weight:700}.controls{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:8px 0}.controls select,.controls button{border:1px solid #485770;border-radius:8px;padding:7px 9px;background:#222d3d;color:#edf3fa;font:inherit}.controls button{cursor:pointer}.controls button.on{border-color:#70e1c1;color:#70e1c1}button#start{border:0;border-radius:10px;padding:9px 16px;background:#70e1c1;color:#10201d;font-size:1rem;font-weight:750;cursor:pointer}#status{font-size:.8rem;color:#b3c0d2;margin-top:7px}a-scene{height:100dvh;width:100vw}
 </style>
 <script>
+AFRAME.registerComponent('carbine-rails', {
+  init() {
+    const addBox=(name,position,scale,color)=>{const el=document.createElement('a-box');el.setAttribute('data-detail',name);el.setAttribute('position',position);el.setAttribute('scale',scale);el.setAttribute('color',color);el.setAttribute('material','metalness: 0.72; roughness: 0.3');this.el.appendChild(el);};
+    for(let i=0;i<8;i++){const z=(-0.19-i*0.035).toFixed(3);addBox('top-rail-slot',`0 0.127 ${z}`,'0.075 0.008 0.012','#555d61');addBox('left-rail-slot',`-0.059 0.015 ${z}`,'0.008 0.055 0.012','#5a6266');addBox('right-rail-slot',`0.059 0.015 ${z}`,'0.008 0.055 0.012','#5a6266');}
+    for(const side of [-1,1])for(const z of [-0.05,-0.20]){const screw=document.createElement('a-cylinder');screw.setAttribute('position',`${side*0.068} 0.018 ${z}`);screw.setAttribute('rotation','0 0 90');screw.setAttribute('radius','0.009');screw.setAttribute('height','0.009');screw.setAttribute('color','#777d7e');screw.setAttribute('material','metalness: 0.86; roughness: 0.28');this.el.appendChild(screw);}
+  }
+});
 AFRAME.registerComponent('vr-trainer', {
   init() {
     this.score=0; this.shots=0; this.running=false; this.left=30; this.timer=null;
@@ -44,7 +51,7 @@ AFRAME.registerComponent('vr-trainer', {
     const vBtn=document.querySelector('#vstock-toggle'),sBtn=document.querySelector('#sound-toggle');vBtn.textContent=`V-Stock: ${this.vstock?'On':'Off'}`;vBtn.classList.toggle('on',this.vstock);sBtn.textContent=`Shot sound: ${this.sound?'On':'Off'}`;sBtn.classList.toggle('on',this.sound);
     const gunNames={carbine:'MK18-style carbine',smg:'Compact SMG',compact:'Compact trainer'};
     document.querySelector('#vr-gun-label').setAttribute('value',`GUN: ${gunNames[this.weapon]}`);document.querySelector('#vr-hand-label').setAttribute('value',`DOMINANT: ${this.hand.toUpperCase()}`);document.querySelector('#vr-vstock-label').setAttribute('value',`V-STOCK: ${this.vstock?'ON':'OFF'}`);document.querySelector('#vr-sound-label').setAttribute('value',`SHOT SOUND: ${this.sound?'ON':'OFF'}`);
-    for(const side of ['right','left']){const isActive=side===this.hand;for(const kind of ['carbine','smg','compact'])document.querySelector(`#gun-${side}-${kind}`).setAttribute('visible',isActive&&kind===this.weapon);document.querySelector(`#muzzle-${side}`).setAttribute('position',`0 0 ${this.weapon==='compact'?'-.39':this.weapon==='smg'?'-.52':'-.62'}`);}
+    const muzzleOffsets={carbine:.544,smg:.416,compact:.316};for(const side of ['right','left']){const isActive=side===this.hand;for(const kind of ['carbine','smg','compact']){const model=document.querySelector(`#gun-${side}-${kind}`);model.setAttribute('visible',isActive&&kind===this.weapon);model.setAttribute('position',`0 0 ${muzzleOffsets[kind]}`);}document.querySelector(`#muzzle-${side}`).setAttribute('position','0 0 0');}
   },
   fire(hand){if(hand!==this.hand||!this.running)return;this.shots++;this.update();const controller=this.controllers[hand],flash=document.querySelector(`#flash-${hand}`),tracer=document.querySelector(`#tracer-${hand}`),gun=document.querySelector(`#gun-${hand}-${this.weapon}`);flash.setAttribute('visible','true');tracer.setAttribute('visible','true');setTimeout(()=>{flash.setAttribute('visible','false');tracer.setAttribute('visible','false');},75);if(gun){gun.removeAttribute('animation__kick');gun.setAttribute('animation__kick',`property: position; from: 0 0 0; to: 0 0 ${this.vstock?'.012':'.045'}; dur: 55; dir: alternate; loop: 1`);}if(this.sound)this.playShot();},
   playShot(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!this.audioCtx)this.audioCtx=new Ctx();this.audioCtx.resume();const now=this.audioCtx.currentTime,osc=this.audioCtx.createOscillator(),gain=this.audioCtx.createGain();osc.type='sawtooth';osc.frequency.setValueAtTime(145,now);osc.frequency.exponentialRampToValueAtTime(48,now+.11);gain.gain.setValueAtTime(.16,now);gain.gain.exponentialRampToValueAtTime(.001,now+.12);osc.connect(gain);gain.connect(this.audioCtx.destination);osc.start(now);osc.stop(now+.13);}catch(e){}}
@@ -58,25 +65,66 @@ AFRAME.registerComponent('vr-trainer', {
   <a-plane position="0 0 -4" rotation="-90 0 0" width="200" height="200" color="#182333"></a-plane>
   <a-entity position="0 1.6 0">
     <a-camera wasd-controls-enabled="false"><a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity></a-camera>
-    <a-entity id="controller-right" laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
-      <a-entity id="gun-right-carbine" class="gun" visible="false">
-        <a-box position="0 0.01 -0.12" width="0.13" height="0.12" depth="0.31" color="#333b42" material="metalness: 0.65; roughness: 0.35"></a-box>
-        <a-box position="0 0.01 -0.31" width="0.105" height="0.095" depth="0.34" color="#252c32" material="metalness: 0.6; roughness: 0.4"></a-box>
-        <a-cylinder position="0 0.015 -0.49" rotation="90 0 0" radius="0.025" height="0.38" color="#15191d" material="metalness: 0.8; roughness: 0.25"></a-cylinder>
-        <a-box position="0 -0.13 -0.11" width="0.07" height="0.19" depth="0.09" rotation="-9 0 0" color="#564e45"></a-box>
-        <a-box position="0 -0.13 -0.23" width="0.09" height="0.2" depth="0.12" color="#252a2f"></a-box>
-        <a-box position="0 0.02 0.13" width="0.09" height="0.085" depth="0.29" color="#333b42"></a-box>
-        <a-box position="0 0.10 -0.13" width="0.08" height="0.055" depth="0.09" color="#161b20"></a-box>
-        <a-cylinder position="0 0.10 -0.13" radius="0.021" height="0.075" color="#70e1c1" material="emissive: #287e70; emissiveIntensity: 0.25"></a-cylinder>
+    <a-entity id="controller-right" laser-controls="hand: right" tracked-controls-webxr="space: targetRaySpace" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+      <a-entity id="gun-right-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
+        <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
+        <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
+        <a-cylinder position="0 0 -0.49" rotation="90 0 0" radius="0.023" height="0.38" color="#171b1f" material="metalness: 0.82; roughness: 0.24"></a-cylinder>
+        <a-cone position="0 0 -0.685" rotation="90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
+        <a-box position="0 0.08 -0.30" width="0.12" height="0.025" depth="0.40" color="#1b2025" material="metalness: 0.8; roughness: 0.3"></a-box>
+        <a-box position="0 0.105 -0.30" width="0.095" height="0.018" depth="0.36" color="#353c42" material="metalness: 0.75; roughness: 0.35"></a-box>
+        <a-box position="0 0.067 -0.13" width="0.07" height="0.035" depth="0.12" color="#15191d"></a-box>
+        <a-cylinder position="0 0.09 -0.14" radius="0.035" height="0.075" color="#182126" material="metalness: 0.45; roughness: 0.2"></a-cylinder>
+        <a-cylinder position="0 0.09 -0.14" radius="0.022" height="0.078" color="#76b9c2" material="metalness: 0.35; roughness: 0.12; emissive: #204d53; emissiveIntensity: 0.12"></a-cylinder>
+        <a-box position="0 0.155 -0.13" width="0.085" height="0.016" depth="0.11" color="#252b30"></a-box>
+        <a-box position="0 -0.13 -0.10" width="0.068" height="0.19" depth="0.085" rotation="-10 0 0" color="#4b4943" material="roughness: 0.82"></a-box>
+        <a-box position="0 -0.13 -0.23" width="0.085" height="0.20" depth="0.11" color="#24292d" material="metalness: 0.6; roughness: 0.4"></a-box>
+        <a-box position="0 -0.11 -0.23" width="0.089" height="0.025" depth="0.11" color="#353b40"></a-box>
+        <a-box position="0 0.02 0.14" width="0.086" height="0.08" depth="0.28" color="#30363b" material="metalness: 0.68; roughness: 0.34"></a-box>
+        <a-box position="0 0.02 0.27" width="0.11" height="0.105" depth="0.20" color="#393a36" material="roughness: 0.72"></a-box>
+        <a-box position="0 0.02 0.37" width="0.12" height="0.12" depth="0.06" color="#252a2e"></a-box>
+        <a-box position="0 0.10 -0.44" width="0.10" height="0.035" depth="0.09" color="#20262b"></a-box>
+        <a-torus position="0 -0.065 -0.09" rotation="90 0 0" radius="0.055" radius-tubular="0.008" color="#171b1e"></a-torus>
+        <a-box position="0 -0.035 -0.10" width="0.013" height="0.052" depth="0.018" color="#77766f"></a-box>
+        <a-box position="0.069 0.015 -0.12" width="0.012" height="0.03" depth="0.075" color="#565d60"></a-box>
+        <a-cylinder position="0.071 0.015 -0.12" rotation="0 0 90" radius="0.012" height="0.025" color="#242a2e"></a-cylinder>
+        <a-box position="0.059 0.085 -0.15" width="0.025" height="0.035" depth="0.06" color="#242a2e"></a-box>
+        <a-box position="-0.059 0.085 -0.15" width="0.025" height="0.035" depth="0.06" color="#242a2e"></a-box>
+        <a-box position="0 0.09 -0.52" width="0.035" height="0.055" depth="0.035" color="#15191d"></a-box>
       </a-entity>
-      <a-entity id="gun-right-smg" class="gun" visible="false"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
-      <a-entity id="gun-right-compact" class="gun" visible="false"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
+      <a-entity id="gun-right-smg" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .416"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
+      <a-entity id="gun-right-compact" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .316"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
       <a-entity id="muzzle-right" position="0 0 -.62"><a-sphere id="flash-right" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-right" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
     </a-entity>
-    <a-entity id="controller-left" laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
-      <a-entity id="gun-left-carbine" class="gun" visible="false"><a-box position="0 0.01 -0.12" width="0.13" height="0.12" depth="0.31" color="#333b42" material="metalness: 0.65; roughness: 0.35"></a-box><a-box position="0 0.01 -0.31" width="0.105" height="0.095" depth="0.34" color="#252c32"></a-box><a-cylinder position="0 0.015 -0.49" rotation="90 0 0" radius="0.025" height="0.38" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.11" width="0.07" height="0.19" depth="0.09" rotation="-9 0 0" color="#564e45"></a-box><a-box position="0 -0.13 -0.23" width="0.09" height="0.2" depth="0.12" color="#252a2f"></a-box><a-box position="0 0.02 0.13" width="0.09" height="0.085" depth="0.29" color="#333b42"></a-box><a-box position="0 0.10 -0.13" width="0.08" height="0.055" depth="0.09" color="#161b20"></a-box><a-cylinder position="0 0.10 -0.13" radius="0.021" height="0.075" color="#70e1c1"></a-cylinder></a-entity>
-      <a-entity id="gun-left-smg" class="gun" visible="false"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
-      <a-entity id="gun-left-compact" class="gun" visible="false"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
+    <a-entity id="controller-left" laser-controls="hand: left" tracked-controls-webxr="space: targetRaySpace" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+      <a-entity id="gun-left-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
+        <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
+        <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
+        <a-cylinder position="0 0 -0.49" rotation="90 0 0" radius="0.023" height="0.38" color="#171b1f" material="metalness: 0.82; roughness: 0.24"></a-cylinder>
+        <a-cone position="0 0 -0.685" rotation="90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
+        <a-box position="0 0.08 -0.30" width="0.12" height="0.025" depth="0.40" color="#1b2025" material="metalness: 0.8; roughness: 0.3"></a-box>
+        <a-box position="0 0.105 -0.30" width="0.095" height="0.018" depth="0.36" color="#353c42" material="metalness: 0.75; roughness: 0.35"></a-box>
+        <a-box position="0 0.067 -0.13" width="0.07" height="0.035" depth="0.12" color="#15191d"></a-box>
+        <a-cylinder position="0 0.09 -0.14" radius="0.035" height="0.075" color="#182126" material="metalness: 0.45; roughness: 0.2"></a-cylinder>
+        <a-cylinder position="0 0.09 -0.14" radius="0.022" height="0.078" color="#76b9c2" material="metalness: 0.35; roughness: 0.12; emissive: #204d53; emissiveIntensity: 0.12"></a-cylinder>
+        <a-box position="0 0.155 -0.13" width="0.085" height="0.016" depth="0.11" color="#252b30"></a-box>
+        <a-box position="0 -0.13 -0.10" width="0.068" height="0.19" depth="0.085" rotation="-10 0 0" color="#4b4943" material="roughness: 0.82"></a-box>
+        <a-box position="0 -0.13 -0.23" width="0.085" height="0.20" depth="0.11" color="#24292d" material="metalness: 0.6; roughness: 0.4"></a-box>
+        <a-box position="0 -0.11 -0.23" width="0.089" height="0.025" depth="0.11" color="#353b40"></a-box>
+        <a-box position="0 0.02 0.14" width="0.086" height="0.08" depth="0.28" color="#30363b" material="metalness: 0.68; roughness: 0.34"></a-box>
+        <a-box position="0 0.02 0.27" width="0.11" height="0.105" depth="0.20" color="#393a36" material="roughness: 0.72"></a-box>
+        <a-box position="0 0.02 0.37" width="0.12" height="0.12" depth="0.06" color="#252a2e"></a-box>
+        <a-box position="0 0.10 -0.44" width="0.10" height="0.035" depth="0.09" color="#20262b"></a-box>
+        <a-torus position="0 -0.065 -0.09" rotation="90 0 0" radius="0.055" radius-tubular="0.008" color="#171b1e"></a-torus>
+        <a-box position="0 -0.035 -0.10" width="0.013" height="0.052" depth="0.018" color="#77766f"></a-box>
+        <a-box position="0.069 0.015 -0.12" width="0.012" height="0.03" depth="0.075" color="#565d60"></a-box>
+        <a-cylinder position="0.071 0.015 -0.12" rotation="0 0 90" radius="0.012" height="0.025" color="#242a2e"></a-cylinder>
+        <a-box position="0.059 0.085 -0.15" width="0.025" height="0.035" depth="0.06" color="#242a2e"></a-box>
+        <a-box position="-0.059 0.085 -0.15" width="0.025" height="0.035" depth="0.06" color="#242a2e"></a-box>
+        <a-box position="0 0.09 -0.52" width="0.035" height="0.055" depth="0.035" color="#15191d"></a-box>
+      </a-entity>
+      <a-entity id="gun-left-smg" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .416"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
+      <a-entity id="gun-left-compact" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .316"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
       <a-entity id="muzzle-left" position="0 0 -.62"><a-sphere id="flash-left" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-left" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
     </a-entity>
   </a-entity>
