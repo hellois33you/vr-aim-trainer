@@ -12,28 +12,48 @@ AFRAME.registerComponent('vr-trainer', {
   init() {
     this.score=0; this.shots=0; this.running=false; this.left=30; this.timer=null;
     this.scoreEl=document.querySelector('#score'); this.timeEl=document.querySelector('#time'); this.accEl=document.querySelector('#acc');
-    this.status=document.querySelector('#status'); this.panel=document.querySelector('#panel');
-    this.target=document.querySelector('#target');
-    this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;this.shots++;this.update();this.moveTarget();});
-    this.el.sceneEl.addEventListener('click',e=>{if(this.running && e.target!==this.target && e.target.tagName!=='A-CURSOR'){this.shots++;this.update();}});
+    this.status=document.querySelector('#status'); this.panel=document.querySelector('#panel'); this.target=document.querySelector('#target');
+    this.sceneStart=document.querySelector('#vr-start'); this.sceneMessage=document.querySelector('#vr-message');
+    this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;this.update();this.moveTarget();});
+    this.el.sceneEl.addEventListener('click',()=>{if(this.running){this.shots++;this.update();}});
     document.querySelector('#start').addEventListener('click',()=>this.start());
+    this.sceneStart.addEventListener('click',()=>this.start());
     this.el.sceneEl.addEventListener('enter-vr',()=>{this.status.textContent='In VR: aim with a controller and press its trigger.';});
     this.el.sceneEl.addEventListener('exit-vr',()=>{this.status.textContent='On desktop: aim with your mouse and click. In VR: use a controller trigger.';});
   },
-  start(){this.score=0;this.shots=0;this.left=30;this.running=true;this.panel.style.display='none';this.update();this.moveTarget();clearInterval(this.timer);this.timer=setInterval(()=>{this.left--;this.update();if(this.left<=0)this.finish();},1000);},
-  moveTarget(){const x=(Math.random()*4.8-2.4).toFixed(2);const y=(Math.random()*2.2+1.1).toFixed(2);const z=(-3.8-Math.random()*1.5).toFixed(2);this.target.setAttribute('position',`${x} ${y} ${z}`);},
-  update(){this.scoreEl.textContent=this.score;this.timeEl.textContent=this.left;this.accEl.textContent=this.shots?`${Math.round(this.score/this.shots*100)}%`:'—';},
-  finish(){this.running=false;clearInterval(this.timer);this.panel.style.display='block';document.querySelector('#title').textContent='Round complete';document.querySelector('#copy').textContent=`You hit ${this.score} targets with ${this.shots?Math.round(this.score/this.shots*100):0}% accuracy.`;document.querySelector('#start').textContent='Play again';this.status.textContent='Round finished.';}
+  start(){this.score=0;this.shots=0;this.left=30;this.running=true;this.panel.style.display='none';this.sceneStart.setAttribute('visible','false');this.sceneMessage.setAttribute('value','');this.update();this.moveTarget();clearInterval(this.timer);this.timer=setInterval(()=>{this.left--;this.update();if(this.left<=0)this.finish();},1000);},
+  moveTarget(){const x=(Math.random()*4.8-2.4).toFixed(2);const y=(Math.random()*2.2+1.1).toFixed(2);const z=(-3.8-Math.random()*1.5).toFixed(2);this.target.setAttribute('position',`${x} ${y} ${z}`);this.target.setAttribute('visible','true');},
+  update(){this.scoreEl.textContent=this.score;this.timeEl.textContent=this.left;this.accEl.textContent=this.shots?`${Math.round(this.score/this.shots*100)}%`:'—';this.sceneMessage.setAttribute('value',`TIME  ${this.left}s     HITS  ${this.score}     ACCURACY  ${this.shots?Math.round(this.score/this.shots*100):0}%`);},
+  finish(){this.running=false;clearInterval(this.timer);this.target.setAttribute('visible','false');this.sceneStart.setAttribute('visible','true');this.sceneMessage.setAttribute('value',`ROUND COMPLETE   ${this.score} HITS   ${this.shots?Math.round(this.score/this.shots*100):0}% ACCURACY`);document.querySelector('#title').textContent='Round complete';document.querySelector('#copy').textContent=`You hit ${this.score} targets with ${this.shots?Math.round(this.score/this.shots*100):0}% accuracy.`;document.querySelector('#start').textContent='Play again';this.panel.style.display='block';this.status.textContent='Round finished. Use the in-scene button to play again in VR.';}
 });
 </script>
 </head>
 <body>
-<div id="panel"><h1 id="title">VR Aim Trainer</h1><p id="copy">A short target practice scene for WebXR headsets. Enter VR, then aim with a controller and press the trigger.</p><div class="row"><span>Time <b id="time">30</b>s</span><span>Hits <b id="score">0</b></span><span>Accuracy <b id="acc">—</b></span></div><button id="start">Start round</button><div id="status">On desktop: aim with your mouse and click. In VR: use a controller trigger.</div></div>
-<a-scene vr-trainer embedded background="color: #101722" renderer="colorManagement: true" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+<div id="panel"><h1 id="title">VR Aim Trainer</h1><p id="copy">Enter VR, then use the start button inside the scene. Aim with a controller and press its trigger.</p><div class="row"><span>Time <b id="time">30</b>s</span><span>Hits <b id="score">0</b></span><span>Accuracy <b id="acc">—</b></span></div><button id="start">Start round</button><div id="status">On desktop: aim with your mouse and click. In VR: use a controller trigger.</div></div>
+<a-scene vr-trainer embedded background="color: #101722" renderer="colorManagement: true">
   <a-entity light="type: ambient; intensity: 1.1"></a-entity><a-entity light="type: directional; intensity: 1.2" position="-1 3 2"></a-entity>
   <a-plane position="0 0 -4" rotation="-90 0 0" width="200" height="200" color="#182333"></a-plane>
-  <a-entity position="0 1.6 0"><a-camera wasd-controls-enabled="false"></a-camera><a-entity laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85"></a-entity><a-entity laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85"></a-entity></a-entity>
-  <a-entity id="target" class="clickable" geometry="primitive: sphere; radius: 0.24" material="color: #ff637c; emissive: #7c1e35; emissiveIntensity: 0.55" position="0 1.7 -4"></a-entity>
+  <a-entity position="0 1.6 0">
+    <a-camera wasd-controls-enabled="false"><a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity></a-camera>
+    <a-entity laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+      <a-box position="0 0 -0.13" width="0.085" height="0.075" depth="0.25" color="#303947" material="metalness: 0.7; roughness: 0.3"></a-box>
+      <a-box position="0 0.035 -0.30" width="0.05" height="0.05" depth="0.22" color="#151a22" material="metalness: 0.75; roughness: 0.25"></a-box>
+      <a-box position="0 -0.09 -0.075" width="0.06" height="0.15" depth="0.085" rotation="-12 0 0" color="#554b42"></a-box>
+      <a-box position="0 0.07 -0.12" width="0.035" height="0.014" depth="0.06" color="#70e1c1" material="emissive: #237c69; emissiveIntensity: 0.45"></a-box>
+    </a-entity>
+    <a-entity laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
+      <a-box position="0 0 -0.13" width="0.085" height="0.075" depth="0.25" color="#303947" material="metalness: 0.7; roughness: 0.3"></a-box>
+      <a-box position="0 0.035 -0.30" width="0.05" height="0.05" depth="0.22" color="#151a22" material="metalness: 0.75; roughness: 0.25"></a-box>
+      <a-box position="0 -0.09 -0.075" width="0.06" height="0.15" depth="0.085" rotation="-12 0 0" color="#554b42"></a-box>
+      <a-box position="0 0.07 -0.12" width="0.035" height="0.014" depth="0.06" color="#70e1c1" material="emissive: #237c69; emissiveIntensity: 0.45"></a-box>
+    </a-entity>
+  </a-entity>
+  <a-entity id="vr-message" position="0 2.65 -4" text="value: POINT AT THE BUTTON TO START; align: center; anchor: center; color: #dce9f7; width: 5"></a-entity>
+  <a-entity id="vr-start" class="clickable" position="0 1.85 -3.8">
+    <a-box class="clickable" width="1.8" height="0.62" depth="0.12" color="#70e1c1" material="emissive: #205e50; emissiveIntensity: 0.35"></a-box>
+    <a-text value="START ROUND" align="center" anchor="center" color="#10201d" width="3.4" position="0 0 0.07"></a-text>
+  </a-entity>
+  <a-entity id="target" class="clickable" geometry="primitive: sphere; radius: 0.24" material="color: #ff637c; emissive: #7c1e35; emissiveIntensity: 0.55" position="0 1.7 -4" visible="false"></a-entity>
   <a-entity position="0 3.4 -5"><a-text value="VR TARGET PRACTICE" align="center" color="#dce9f7" width="5"></a-text></a-entity>
 </a-scene>
 </body></html>
