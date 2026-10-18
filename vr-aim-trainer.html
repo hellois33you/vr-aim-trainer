@@ -25,8 +25,11 @@ AFRAME.registerComponent('target-ray-align', {
     if(!source)return;
     const pose=frame.getPose(source.targetRaySpace,tracked.referenceSpace);if(!pose)return;
     const parent=this.controller.object3D;parent.updateWorldMatrix(true,false);
-    const local=new AFRAME.THREE.Matrix4().copy(parent.matrixWorld).invert().multiply(new AFRAME.THREE.Matrix4().fromArray(pose.transform.matrix));
-    local.decompose(this.el.object3D.position,this.el.object3D.quaternion,this.el.object3D.scale);
+    const gripOrientation=parent.getWorldQuaternion(new AFRAME.THREE.Quaternion());
+    const rayOrientation=pose.transform.orientation;
+    const targetOrientation=new AFRAME.THREE.Quaternion(rayOrientation.x,rayOrientation.y,rayOrientation.z,rayOrientation.w);
+    this.el.object3D.position.set(0,0,0);
+    this.el.object3D.quaternion.copy(gripOrientation.invert().multiply(targetOrientation));
   }
 });
 AFRAME.registerComponent('vr-trainer', {
@@ -38,6 +41,7 @@ AFRAME.registerComponent('vr-trainer', {
     this.sceneStart=document.querySelector('#vr-start'); this.sceneMessage=document.querySelector('#vr-message'); this.vrMenu=document.querySelector('#vr-menu');
     this.controllers={right:document.querySelector('#controller-right'),left:document.querySelector('#controller-left')};
     this.aims={right:document.querySelector('#aim-right'),left:document.querySelector('#aim-left')};
+    this.rays={right:document.querySelector('#ray-right'),left:document.querySelector('#ray-left')};
     this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;if(!this.el.sceneEl.is('vr-mode'))this.shots++;this.update();this.moveTarget();});
     document.querySelector('#start').addEventListener('click',()=>this.start());
     this.sceneStart.addEventListener('click',()=>this.start());
@@ -66,9 +70,9 @@ AFRAME.registerComponent('vr-trainer', {
     const vBtn=document.querySelector('#vstock-toggle'),sBtn=document.querySelector('#sound-toggle');vBtn.textContent=`V-Stock: ${this.vstock?'On':'Off'}`;vBtn.classList.toggle('on',this.vstock);sBtn.textContent=`Shot sound: ${this.sound?'On':'Off'}`;sBtn.classList.toggle('on',this.sound);
     const gunNames={carbine:'MK18-style carbine',smg:'Compact SMG',compact:'Compact trainer'};
     document.querySelector('#vr-gun-label').setAttribute('value',`GUN: ${gunNames[this.weapon]}`);document.querySelector('#vr-hand-label').setAttribute('value',`DOMINANT: ${this.hand.toUpperCase()}`);document.querySelector('#vr-vstock-label').setAttribute('value',`V-STOCK: ${this.vstock?'ON':'OFF'}`);document.querySelector('#vr-sound-label').setAttribute('value',`SHOT SOUND: ${this.sound?'ON':'OFF'}`);
-    const muzzleOffsets={carbine:.544,smg:.416,compact:.316};for(const side of ['right','left']){const isActive=side===this.hand;for(const kind of ['carbine','smg','compact']){const model=document.querySelector(`#gun-${side}-${kind}`);model.setAttribute('visible',isActive&&kind===this.weapon);model.setAttribute('position',`0 0 ${muzzleOffsets[kind]}`);}document.querySelector(`#muzzle-${side}`).setAttribute('position','0 0 0');}
+    const muzzleOffsets={carbine:-.468,smg:-.336,compact:-.284},gripOffsets={carbine:'0 .104 .08',smg:'0 .104 .08',compact:'0 .096 .032'};for(const side of ['right','left']){const isActive=side===this.hand;for(const kind of ['carbine','smg','compact']){const model=document.querySelector(`#gun-${side}-${kind}`);model.setAttribute('visible',isActive&&kind===this.weapon);model.setAttribute('position',gripOffsets[kind]);}document.querySelector(`#muzzle-${side}`).setAttribute('position',`0 0 ${muzzleOffsets[this.weapon]}`);this.rays[side].setAttribute('position',`0 0 ${muzzleOffsets[this.weapon]}`);}
   },
-  fire(hand){if(hand!==this.hand)return;const aim=this.aims[hand],ray=aim?.components?.raycaster,hit=ray?.intersections?.[0]?.object?.el;let clickable=hit;while(clickable&&!clickable.classList?.contains('clickable'))clickable=clickable.parentElement;const wasRunning=this.running;if(clickable)clickable.emit('click',{source:'controller'},true);if(clickable&&clickable!==this.target)return;if(!wasRunning||!this.running)return;this.shots++;this.update();const flash=document.querySelector(`#flash-${hand}`),tracer=document.querySelector(`#tracer-${hand}`),gun=document.querySelector(`#gun-${hand}-${this.weapon}`);flash.setAttribute('visible','true');tracer.setAttribute('visible','true');setTimeout(()=>{flash.setAttribute('visible','false');tracer.setAttribute('visible','false');},75);if(gun){gun.removeAttribute('animation__kick');gun.setAttribute('animation__kick',`property: position; from: 0 0 0; to: 0 0 ${this.vstock?'.012':'.045'}; dur: 55; dir: alternate; loop: 1`);}if(this.sound)this.playShot();},
+  fire(hand){if(hand!==this.hand)return;const ray=this.rays[hand],hit=ray?.components?.raycaster?.intersections?.[0]?.object?.el;let clickable=hit;while(clickable&&!clickable.classList?.contains('clickable'))clickable=clickable.parentElement;const wasRunning=this.running;if(clickable)clickable.emit('click',{source:'controller'},true);if(clickable&&clickable!==this.target)return;if(!wasRunning||!this.running)return;this.shots++;this.update();const flash=document.querySelector(`#flash-${hand}`),tracer=document.querySelector(`#tracer-${hand}`),gun=document.querySelector(`#gun-${hand}-${this.weapon}`);flash.setAttribute('visible','true');tracer.setAttribute('visible','true');setTimeout(()=>{flash.setAttribute('visible','false');tracer.setAttribute('visible','false');},75);if(gun){gun.removeAttribute('animation__kick');gun.setAttribute('animation__kick',`property: position; from: 0 0 0; to: 0 0 ${this.vstock?'.012':'.045'}; dur: 55; dir: alternate; loop: 1`);}if(this.sound)this.playShot();},
   playShot(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!this.audioCtx)this.audioCtx=new Ctx();this.audioCtx.resume();const now=this.audioCtx.currentTime,osc=this.audioCtx.createOscillator(),gain=this.audioCtx.createGain();osc.type='sawtooth';osc.frequency.setValueAtTime(145,now);osc.frequency.exponentialRampToValueAtTime(48,now+.11);gain.gain.setValueAtTime(.16,now);gain.gain.exponentialRampToValueAtTime(.001,now+.12);osc.connect(gain);gain.connect(this.audioCtx.destination);osc.start(now);osc.stop(now+.13);}catch(e){}}
 });
 </script>
@@ -81,12 +85,14 @@ AFRAME.registerComponent('vr-trainer', {
   <a-entity>
     <a-camera position="0 1.6 0" wasd-controls-enabled="false"><a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity></a-camera>
     <a-entity id="controller-right" laser-controls="hand: right" line="visible: false">
-      <a-entity id="aim-right" target-ray-align="hand: right" raycaster="objects: .clickable" line="start: 0 0 0; end: 0 0 -4; color: #70e1c1; opacity: 0.38">
+      <a-entity id="aim-right" target-ray-align="hand: right">
       <a-entity id="gun-right-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
         <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
         <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
         <a-cylinder position="0 0 -0.49" rotation="90 0 0" radius="0.023" height="0.38" color="#171b1f" material="metalness: 0.82; roughness: 0.24"></a-cylinder>
-        <a-cone position="0 0 -0.685" rotation="90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
+        <a-cylinder position="0 0 -0.665" rotation="90 0 0" radius="0.032" height="0.045" color="#252b30" material="metalness: 0.88; roughness: 0.24"></a-cylinder>
+        <a-cylinder position="0 0 -0.685" rotation="90 0 0" radius="0.024" height="0.055" color="#111518" material="metalness: 0.85; roughness: 0.22"></a-cylinder>
+        <a-cone position="0 0 -0.685" rotation="-90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
         <a-box position="0 0.08 -0.30" width="0.12" height="0.025" depth="0.40" color="#1b2025" material="metalness: 0.8; roughness: 0.3"></a-box>
         <a-box position="0 0.105 -0.30" width="0.095" height="0.018" depth="0.36" color="#353c42" material="metalness: 0.75; roughness: 0.35"></a-box>
         <a-box position="0 0.067 -0.13" width="0.07" height="0.035" depth="0.12" color="#15191d"></a-box>
@@ -110,16 +116,19 @@ AFRAME.registerComponent('vr-trainer', {
       </a-entity>
       <a-entity id="gun-right-smg" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .416"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
       <a-entity id="gun-right-compact" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .316"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
-      <a-entity id="muzzle-right" position="0 0 -.62"><a-sphere id="flash-right" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-right" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity id="muzzle-right" position="0 0 -.468"><a-sphere id="flash-right" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-right" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity id="ray-right" position="0 0 -.468" raycaster="objects: .clickable" line="start: 0 0 0; end: 0 0 -4; color: #70e1c1; opacity: 0.38"></a-entity>
       </a-entity>
     </a-entity>
     <a-entity id="controller-left" laser-controls="hand: left" line="visible: false">
-      <a-entity id="aim-left" target-ray-align="hand: left" raycaster="objects: .clickable" line="start: 0 0 0; end: 0 0 -4; color: #70e1c1; opacity: 0.38">
+      <a-entity id="aim-left" target-ray-align="hand: left">
       <a-entity id="gun-left-carbine" class="gun" carbine-rails visible="false" scale="0.8 0.8 0.8" position="0 0 0.544">
         <a-box position="0 0 -0.12" width="0.13" height="0.12" depth="0.30" color="#30363b" material="metalness: 0.72; roughness: 0.3"></a-box>
         <a-box position="0 0 -0.31" width="0.105" height="0.098" depth="0.33" color="#252b30" material="metalness: 0.72; roughness: 0.32"></a-box>
         <a-cylinder position="0 0 -0.49" rotation="90 0 0" radius="0.023" height="0.38" color="#171b1f" material="metalness: 0.82; roughness: 0.24"></a-cylinder>
-        <a-cone position="0 0 -0.685" rotation="90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
+        <a-cylinder position="0 0 -0.665" rotation="90 0 0" radius="0.032" height="0.045" color="#252b30" material="metalness: 0.88; roughness: 0.24"></a-cylinder>
+        <a-cylinder position="0 0 -0.685" rotation="90 0 0" radius="0.024" height="0.055" color="#111518" material="metalness: 0.85; roughness: 0.22"></a-cylinder>
+        <a-cone position="0 0 -0.685" rotation="-90 0 0" radius-bottom="0.03" radius-top="0.021" height="0.055" color="#171b1f" material="metalness: 0.82; roughness: 0.22"></a-cone>
         <a-box position="0 0.08 -0.30" width="0.12" height="0.025" depth="0.40" color="#1b2025" material="metalness: 0.8; roughness: 0.3"></a-box>
         <a-box position="0 0.105 -0.30" width="0.095" height="0.018" depth="0.36" color="#353c42" material="metalness: 0.75; roughness: 0.35"></a-box>
         <a-box position="0 0.067 -0.13" width="0.07" height="0.035" depth="0.12" color="#15191d"></a-box>
@@ -143,7 +152,8 @@ AFRAME.registerComponent('vr-trainer', {
       </a-entity>
       <a-entity id="gun-left-smg" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .416"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
       <a-entity id="gun-left-compact" class="gun" visible="false" scale="0.8 0.8 0.8" position="0 0 .316"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
-      <a-entity id="muzzle-left" position="0 0 -.62"><a-sphere id="flash-left" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-left" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity id="muzzle-left" position="0 0 -.468"><a-sphere id="flash-left" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-left" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity id="ray-left" position="0 0 -.468" raycaster="objects: .clickable" line="start: 0 0 0; end: 0 0 -4; color: #70e1c1; opacity: 0.38"></a-entity>
       </a-entity>
     </a-entity>
   </a-entity>
