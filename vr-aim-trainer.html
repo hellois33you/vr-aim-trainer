@@ -5,53 +5,91 @@
 <title>VR Aim Trainer</title>
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <style>
-html,body{margin:0;font-family:system-ui,sans-serif;background:#10141d;color:#edf3fa}#panel{position:fixed;z-index:5;left:50%;top:16px;transform:translateX(-50%);width:min(460px,92vw);text-align:center;background:#151d2bea;border:1px solid #40506a;border-radius:16px;padding:16px;box-sizing:border-box}h1{font-size:1.35rem;margin:0 0 6px}p{margin:6px 0 12px;color:#b3c0d2;font-size:.92rem;line-height:1.4}.row{display:flex;justify-content:center;gap:18px;margin:10px 0;font-weight:700}button{border:0;border-radius:10px;padding:10px 16px;background:#70e1c1;color:#10201d;font-size:1rem;font-weight:750}#status{font-size:.85rem;color:#b3c0d2;margin-top:8px}a-scene{height:100dvh;width:100vw}
+:root{color-scheme:dark}html,body{margin:0;font-family:system-ui,sans-serif;background:#10141d;color:#edf3fa}#panel{position:fixed;z-index:5;left:50%;top:14px;transform:translateX(-50%);width:min(500px,94vw);text-align:center;background:#151d2bea;border:1px solid #40506a;border-radius:16px;padding:14px;box-sizing:border-box}h1{font-size:1.3rem;margin:0 0 5px}p{margin:5px 0 10px;color:#b3c0d2;font-size:.88rem;line-height:1.35}.row{display:flex;justify-content:center;gap:16px;margin:9px 0;font-weight:700}.controls{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:8px 0}.controls select,.controls button{border:1px solid #485770;border-radius:8px;padding:7px 9px;background:#222d3d;color:#edf3fa;font:inherit}.controls button{cursor:pointer}.controls button.on{border-color:#70e1c1;color:#70e1c1}button#start{border:0;border-radius:10px;padding:9px 16px;background:#70e1c1;color:#10201d;font-size:1rem;font-weight:750;cursor:pointer}#status{font-size:.8rem;color:#b3c0d2;margin-top:7px}a-scene{height:100dvh;width:100vw}
 </style>
 <script>
 AFRAME.registerComponent('vr-trainer', {
   init() {
     this.score=0; this.shots=0; this.running=false; this.left=30; this.timer=null;
+    this.weapon='carbine'; this.hand='right'; this.vstock=true; this.sound=true; this.audioCtx=null;
     this.scoreEl=document.querySelector('#score'); this.timeEl=document.querySelector('#time'); this.accEl=document.querySelector('#acc');
     this.status=document.querySelector('#status'); this.panel=document.querySelector('#panel'); this.target=document.querySelector('#target');
-    this.sceneStart=document.querySelector('#vr-start'); this.sceneMessage=document.querySelector('#vr-message');
-    this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;this.update();this.moveTarget();});
-    this.el.sceneEl.addEventListener('click',()=>{if(this.running){this.shots++;this.update();}});
+    this.sceneStart=document.querySelector('#vr-start'); this.sceneMessage=document.querySelector('#vr-message'); this.vrMenu=document.querySelector('#vr-menu');
+    this.controllers={right:document.querySelector('#controller-right'),left:document.querySelector('#controller-left')};
+    this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;if(!this.el.sceneEl.is('vr-mode'))this.shots++;this.update();this.moveTarget();});
     document.querySelector('#start').addEventListener('click',()=>this.start());
     this.sceneStart.addEventListener('click',()=>this.start());
-    this.el.sceneEl.addEventListener('enter-vr',()=>{this.status.textContent='In VR: aim with a controller and press its trigger.';});
-    this.el.sceneEl.addEventListener('exit-vr',()=>{this.status.textContent='On desktop: aim with your mouse and click. In VR: use a controller trigger.';});
+    document.querySelector('#menu-toggle').addEventListener('click',()=>this.toggleMenu());
+    document.querySelector('#vr-menu-toggle').addEventListener('click',()=>this.toggleMenu());
+    document.querySelector('#gun-choice').addEventListener('change',e=>{this.weapon=e.target.value;this.refreshSettings();});
+    document.querySelector('#hand-choice').addEventListener('change',e=>{this.hand=e.target.value;this.refreshSettings();});
+    document.querySelector('#vstock-toggle').addEventListener('click',()=>{this.vstock=!this.vstock;this.refreshSettings();});
+    document.querySelector('#sound-toggle').addEventListener('click',()=>{this.sound=!this.sound;this.refreshSettings();});
+    document.querySelector('#vr-gun-btn').addEventListener('click',()=>{this.weapon=this.weapon==='carbine'?'smg':this.weapon==='smg'?'compact':'carbine';this.refreshSettings();});
+    document.querySelector('#vr-hand-btn').addEventListener('click',()=>{this.hand=this.hand==='right'?'left':'right';this.refreshSettings();});
+    document.querySelector('#vr-vstock-btn').addEventListener('click',()=>{this.vstock=!this.vstock;this.refreshSettings();});
+    document.querySelector('#vr-sound-btn').addEventListener('click',()=>{this.sound=!this.sound;this.refreshSettings();});
+    for (const [hand,controller] of Object.entries(this.controllers)) controller.addEventListener('triggerdown',()=>this.fire(hand));
+    this.el.sceneEl.addEventListener('enter-vr',()=>{this.status.textContent='In VR: point the carbine at a target and pull the selected controller trigger. Open MENU for settings.';});
+    this.el.sceneEl.addEventListener('exit-vr',()=>{this.status.textContent='Desktop: use the mouse. VR: point the selected hand and pull its trigger.';});
+    this.refreshSettings();
   },
   start(){this.score=0;this.shots=0;this.left=30;this.running=true;this.panel.style.display='none';this.sceneStart.setAttribute('visible','false');this.sceneMessage.setAttribute('value','');this.update();this.moveTarget();clearInterval(this.timer);this.timer=setInterval(()=>{this.left--;this.update();if(this.left<=0)this.finish();},1000);},
   moveTarget(){const x=(Math.random()*4.8-2.4).toFixed(2);const y=(Math.random()*2.2+1.1).toFixed(2);const z=(-3.8-Math.random()*1.5).toFixed(2);this.target.setAttribute('position',`${x} ${y} ${z}`);this.target.setAttribute('visible','true');},
-  update(){this.scoreEl.textContent=this.score;this.timeEl.textContent=this.left;this.accEl.textContent=this.shots?`${Math.round(this.score/this.shots*100)}%`:'—';this.sceneMessage.setAttribute('value',`TIME  ${this.left}s     HITS  ${this.score}     ACCURACY  ${this.shots?Math.round(this.score/this.shots*100):0}%`);},
-  finish(){this.running=false;clearInterval(this.timer);this.target.setAttribute('visible','false');this.sceneStart.setAttribute('visible','true');this.sceneMessage.setAttribute('value',`ROUND COMPLETE   ${this.score} HITS   ${this.shots?Math.round(this.score/this.shots*100):0}% ACCURACY`);document.querySelector('#title').textContent='Round complete';document.querySelector('#copy').textContent=`You hit ${this.score} targets with ${this.shots?Math.round(this.score/this.shots*100):0}% accuracy.`;document.querySelector('#start').textContent='Play again';this.panel.style.display='block';this.status.textContent='Round finished. Use the in-scene button to play again in VR.';}
+  update(){this.scoreEl.textContent=this.score;this.timeEl.textContent=this.left;this.accEl.textContent=this.shots?`${Math.round(this.score/this.shots*100)}%`:'—';this.sceneMessage.setAttribute('value',`TIME ${this.left}s   HITS ${this.score}   ACCURACY ${this.shots?Math.round(this.score/this.shots*100):0}%`);},
+  finish(){this.running=false;clearInterval(this.timer);this.target.setAttribute('visible','false');this.sceneStart.setAttribute('visible','true');this.sceneMessage.setAttribute('value',`ROUND COMPLETE   ${this.score} HITS   ${this.shots?Math.round(this.score/this.shots*100):0}% ACCURACY`);document.querySelector('#title').textContent='Round complete';document.querySelector('#copy').textContent=`You hit ${this.score} targets with ${this.shots?Math.round(this.score/this.shots*100):0}% accuracy.`;document.querySelector('#start').textContent='Play again';this.panel.style.display='block';this.status.textContent='Round finished. Use START ROUND to play again.';},
+  toggleMenu(){const open=this.vrMenu.getAttribute('visible')!==true;this.vrMenu.setAttribute('visible',open);document.querySelector('#vr-menu-toggle-label').setAttribute('value',open?'CLOSE MENU':'MENU');},
+  refreshSettings(){
+    document.querySelector('#gun-choice').value=this.weapon;document.querySelector('#hand-choice').value=this.hand;
+    const vBtn=document.querySelector('#vstock-toggle'),sBtn=document.querySelector('#sound-toggle');vBtn.textContent=`V-Stock: ${this.vstock?'On':'Off'}`;vBtn.classList.toggle('on',this.vstock);sBtn.textContent=`Shot sound: ${this.sound?'On':'Off'}`;sBtn.classList.toggle('on',this.sound);
+    const gunNames={carbine:'MK18-style carbine',smg:'Compact SMG',compact:'Compact trainer'};
+    document.querySelector('#vr-gun-label').setAttribute('value',`GUN: ${gunNames[this.weapon]}`);document.querySelector('#vr-hand-label').setAttribute('value',`DOMINANT: ${this.hand.toUpperCase()}`);document.querySelector('#vr-vstock-label').setAttribute('value',`V-STOCK: ${this.vstock?'ON':'OFF'}`);document.querySelector('#vr-sound-label').setAttribute('value',`SHOT SOUND: ${this.sound?'ON':'OFF'}`);
+    for(const side of ['right','left']){const isActive=side===this.hand;for(const kind of ['carbine','smg','compact'])document.querySelector(`#gun-${side}-${kind}`).setAttribute('visible',isActive&&kind===this.weapon);document.querySelector(`#muzzle-${side}`).setAttribute('position',`0 0 ${this.weapon==='compact'?'-.39':this.weapon==='smg'?'-.52':'-.62'}`);}
+  },
+  fire(hand){if(hand!==this.hand||!this.running)return;this.shots++;this.update();const controller=this.controllers[hand],flash=document.querySelector(`#flash-${hand}`),tracer=document.querySelector(`#tracer-${hand}`),gun=document.querySelector(`#gun-${hand}-${this.weapon}`);flash.setAttribute('visible','true');tracer.setAttribute('visible','true');setTimeout(()=>{flash.setAttribute('visible','false');tracer.setAttribute('visible','false');},75);if(gun){gun.removeAttribute('animation__kick');gun.setAttribute('animation__kick',`property: position; from: 0 0 0; to: 0 0 ${this.vstock?'.012':'.045'}; dur: 55; dir: alternate; loop: 1`);}if(this.sound)this.playShot();},
+  playShot(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!this.audioCtx)this.audioCtx=new Ctx();this.audioCtx.resume();const now=this.audioCtx.currentTime,osc=this.audioCtx.createOscillator(),gain=this.audioCtx.createGain();osc.type='sawtooth';osc.frequency.setValueAtTime(145,now);osc.frequency.exponentialRampToValueAtTime(48,now+.11);gain.gain.setValueAtTime(.16,now);gain.gain.exponentialRampToValueAtTime(.001,now+.12);osc.connect(gain);gain.connect(this.audioCtx.destination);osc.start(now);osc.stop(now+.13);}catch(e){}}
 });
 </script>
 </head>
 <body>
-<div id="panel"><h1 id="title">VR Aim Trainer</h1><p id="copy">Enter VR, then use the start button inside the scene. Aim with a controller and press its trigger.</p><div class="row"><span>Time <b id="time">30</b>s</span><span>Hits <b id="score">0</b></span><span>Accuracy <b id="acc">—</b></span></div><button id="start">Start round</button><div id="status">On desktop: aim with your mouse and click. In VR: use a controller trigger.</div></div>
+<div id="panel"><h1 id="title">VR Aim Trainer</h1><p id="copy">Enter VR, choose your training setup, then use START ROUND in the scene. Point the selected controller at a target and pull its trigger.</p><div class="row"><span>Time <b id="time">30</b>s</span><span>Hits <b id="score">0</b></span><span>Accuracy <b id="acc">—</b></span></div><div class="controls"><select id="gun-choice" aria-label="Gun"><option value="carbine">MK18-style carbine</option><option value="smg">Compact SMG</option><option value="compact">Compact trainer</option></select><select id="hand-choice" aria-label="Dominant hand"><option value="right">Right dominant</option><option value="left">Left dominant</option></select><button id="vstock-toggle" type="button">V-Stock: On</button><button id="sound-toggle" type="button">Shot sound: On</button><button id="menu-toggle" type="button">VR menu</button></div><button id="start">Start round</button><div id="status">Desktop: use the mouse. VR: point the selected hand and pull its trigger.</div></div>
 <a-scene vr-trainer embedded background="color: #101722" renderer="colorManagement: true">
   <a-entity light="type: ambient; intensity: 1.1"></a-entity><a-entity light="type: directional; intensity: 1.2" position="-1 3 2"></a-entity>
   <a-plane position="0 0 -4" rotation="-90 0 0" width="200" height="200" color="#182333"></a-plane>
   <a-entity position="0 1.6 0">
     <a-camera wasd-controls-enabled="false"><a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity></a-camera>
-    <a-entity laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
-      <a-box position="0 0 -0.13" width="0.085" height="0.075" depth="0.25" color="#303947" material="metalness: 0.7; roughness: 0.3"></a-box>
-      <a-box position="0 0.035 -0.30" width="0.05" height="0.05" depth="0.22" color="#151a22" material="metalness: 0.75; roughness: 0.25"></a-box>
-      <a-box position="0 -0.09 -0.075" width="0.06" height="0.15" depth="0.085" rotation="-12 0 0" color="#554b42"></a-box>
-      <a-box position="0 0.07 -0.12" width="0.035" height="0.014" depth="0.06" color="#70e1c1" material="emissive: #237c69; emissiveIntensity: 0.45"></a-box>
+    <a-entity id="controller-right" laser-controls="hand: right" line="color: #70e1c1; opacity: 0.85">
+      <a-entity id="gun-right-carbine" class="gun" visible="false">
+        <a-box position="0 0.01 -0.12" width="0.13" height="0.12" depth="0.31" color="#333b42" material="metalness: 0.65; roughness: 0.35"></a-box>
+        <a-box position="0 0.01 -0.31" width="0.105" height="0.095" depth="0.34" color="#252c32" material="metalness: 0.6; roughness: 0.4"></a-box>
+        <a-cylinder position="0 0.015 -0.49" rotation="90 0 0" radius="0.025" height="0.38" color="#15191d" material="metalness: 0.8; roughness: 0.25"></a-cylinder>
+        <a-box position="0 -0.13 -0.11" width="0.07" height="0.19" depth="0.09" rotation="-9 0 0" color="#564e45"></a-box>
+        <a-box position="0 -0.13 -0.23" width="0.09" height="0.2" depth="0.12" color="#252a2f"></a-box>
+        <a-box position="0 0.02 0.13" width="0.09" height="0.085" depth="0.29" color="#333b42"></a-box>
+        <a-box position="0 0.10 -0.13" width="0.08" height="0.055" depth="0.09" color="#161b20"></a-box>
+        <a-cylinder position="0 0.10 -0.13" radius="0.021" height="0.075" color="#70e1c1" material="emissive: #287e70; emissiveIntensity: 0.25"></a-cylinder>
+      </a-entity>
+      <a-entity id="gun-right-smg" class="gun" visible="false"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
+      <a-entity id="gun-right-compact" class="gun" visible="false"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
+      <a-entity id="muzzle-right" position="0 0 -.62"><a-sphere id="flash-right" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-right" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity position="0 0 -.62" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable"></a-entity>
     </a-entity>
-    <a-entity laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85">
-      <a-box position="0 0 -0.13" width="0.085" height="0.075" depth="0.25" color="#303947" material="metalness: 0.7; roughness: 0.3"></a-box>
-      <a-box position="0 0.035 -0.30" width="0.05" height="0.05" depth="0.22" color="#151a22" material="metalness: 0.75; roughness: 0.25"></a-box>
-      <a-box position="0 -0.09 -0.075" width="0.06" height="0.15" depth="0.085" rotation="-12 0 0" color="#554b42"></a-box>
-      <a-box position="0 0.07 -0.12" width="0.035" height="0.014" depth="0.06" color="#70e1c1" material="emissive: #237c69; emissiveIntensity: 0.45"></a-box>
+    <a-entity id="controller-left" laser-controls="hand: left" line="color: #70e1c1; opacity: 0.85">
+      <a-entity id="gun-left-carbine" class="gun" visible="false"><a-box position="0 0.01 -0.12" width="0.13" height="0.12" depth="0.31" color="#333b42" material="metalness: 0.65; roughness: 0.35"></a-box><a-box position="0 0.01 -0.31" width="0.105" height="0.095" depth="0.34" color="#252c32"></a-box><a-cylinder position="0 0.015 -0.49" rotation="90 0 0" radius="0.025" height="0.38" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.11" width="0.07" height="0.19" depth="0.09" rotation="-9 0 0" color="#564e45"></a-box><a-box position="0 -0.13 -0.23" width="0.09" height="0.2" depth="0.12" color="#252a2f"></a-box><a-box position="0 0.02 0.13" width="0.09" height="0.085" depth="0.29" color="#333b42"></a-box><a-box position="0 0.10 -0.13" width="0.08" height="0.055" depth="0.09" color="#161b20"></a-box><a-cylinder position="0 0.10 -0.13" radius="0.021" height="0.075" color="#70e1c1"></a-cylinder></a-entity>
+      <a-entity id="gun-left-smg" class="gun" visible="false"><a-box position="0 0 -0.10" width="0.13" height="0.12" depth="0.29" color="#303940"></a-box><a-cylinder position="0 0 -0.36" rotation="90 0 0" radius="0.026" height="0.32" color="#15191d"></a-cylinder><a-box position="0 -0.13 -0.10" width="0.07" height="0.18" depth="0.09" color="#564e45"></a-box><a-box position="0 -0.12 -0.20" width="0.09" height="0.15" depth="0.11" color="#272e34"></a-box><a-box position="0 0.02 0.12" width="0.09" height="0.08" depth="0.22" color="#303940"></a-box></a-entity>
+      <a-entity id="gun-left-compact" class="gun" visible="false"><a-box position="0 0 -0.08" width="0.11" height="0.10" depth="0.24" color="#303940"></a-box><a-cylinder position="0 0 -0.27" rotation="90 0 0" radius="0.023" height="0.25" color="#15191d"></a-cylinder><a-box position="0 -0.12 -0.04" width="0.065" height="0.17" depth="0.08" color="#564e45"></a-box></a-entity>
+      <a-entity id="muzzle-left" position="0 0 -.62"><a-sphere id="flash-left" radius="0.09" color="#ffbf57" material="emissive: #ff7b22; emissiveIntensity: 1" visible="false"></a-sphere><a-entity id="tracer-left" position="0 0 0" line="start: 0 0 0; end: 0 0 -3.2; color: #ffc66b; opacity: 0.95" visible="false"></a-entity></a-entity>
+      <a-entity position="0 0 -.62" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable"></a-entity>
     </a-entity>
   </a-entity>
-  <a-entity id="vr-message" position="0 2.65 -4" text="value: POINT AT THE BUTTON TO START; align: center; anchor: center; color: #dce9f7; width: 5"></a-entity>
-  <a-entity id="vr-start" class="clickable" position="0 1.85 -3.8">
-    <a-box class="clickable" width="1.8" height="0.62" depth="0.12" color="#70e1c1" material="emissive: #205e50; emissiveIntensity: 0.35"></a-box>
-    <a-text value="START ROUND" align="center" anchor="center" color="#10201d" width="3.4" position="0 0 0.07"></a-text>
+  <a-entity id="vr-message" position="0 2.65 -4" text="value: OPEN MENU TO SET UP; align: center; anchor: center; color: #dce9f7; width: 5"></a-entity>
+  <a-entity id="vr-start" class="clickable" position="0 1.85 -3.8"><a-box class="clickable" width="1.8" height="0.62" depth="0.12" color="#70e1c1" material="emissive: #205e50; emissiveIntensity: 0.35"></a-box><a-text value="START ROUND" align="center" anchor="center" color="#10201d" width="3.4" position="0 0 0.07"></a-text></a-entity>
+  <a-entity id="vr-menu-toggle" class="clickable" position="-1.55 2.45 -3.8"><a-box class="clickable" width="0.72" height="0.36" depth="0.08" color="#263448"></a-box><a-text id="vr-menu-toggle-label" value="MENU" align="center" anchor="center" color="#dce9f7" width="1.8" position="0 0 0.05"></a-text></a-entity>
+  <a-entity id="vr-menu" position="-1.45 1.65 -3.7" visible="false"><a-plane width="2.45" height="2.55" color="#172232" material="opacity: 0.96; transparent: true"></a-plane><a-text value="TRAINING SETTINGS" position="0 0.94 0.03" align="center" anchor="center" color="#dce9f7" width="3.6"></a-text>
+    <a-entity id="vr-gun-btn" class="clickable" position="0 0.48 0.05"><a-box class="clickable" width="2.05" height="0.34" depth="0.07" color="#2d3a4d"></a-box><a-text id="vr-gun-label" value="GUN" position="0 0 0.05" align="center" anchor="center" color="#edf3fa" width="3.2"></a-text></a-entity>
+    <a-entity id="vr-hand-btn" class="clickable" position="0 0.03 0.05"><a-box class="clickable" width="2.05" height="0.34" depth="0.07" color="#2d3a4d"></a-box><a-text id="vr-hand-label" value="DOMINANT" position="0 0 0.05" align="center" anchor="center" color="#edf3fa" width="3.2"></a-text></a-entity>
+    <a-entity id="vr-vstock-btn" class="clickable" position="0 -0.42 0.05"><a-box class="clickable" width="2.05" height="0.34" depth="0.07" color="#2d3a4d"></a-box><a-text id="vr-vstock-label" value="V-STOCK" position="0 0 0.05" align="center" anchor="center" color="#edf3fa" width="3.2"></a-text></a-entity>
+    <a-entity id="vr-sound-btn" class="clickable" position="0 -0.87 0.05"><a-box class="clickable" width="2.05" height="0.34" depth="0.07" color="#2d3a4d"></a-box><a-text id="vr-sound-label" value="SHOT SOUND" position="0 0 0.05" align="center" anchor="center" color="#edf3fa" width="3.2"></a-text></a-entity>
   </a-entity>
   <a-entity id="target" class="clickable" geometry="primitive: sphere; radius: 0.24" material="color: #ff637c; emissive: #7c1e35; emissiveIntensity: 0.55" position="0 1.7 -4" visible="false"></a-entity>
   <a-entity position="0 3.4 -5"><a-text value="VR TARGET PRACTICE" align="center" color="#dce9f7" width="5"></a-text></a-entity>
