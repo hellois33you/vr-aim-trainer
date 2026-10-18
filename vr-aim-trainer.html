@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VR Aim Trainer</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<style>
+html,body{margin:0;font-family:system-ui,sans-serif;background:#10141d;color:#edf3fa}#panel{position:fixed;z-index:5;left:50%;top:16px;transform:translateX(-50%);width:min(460px,92vw);text-align:center;background:#151d2bea;border:1px solid #40506a;border-radius:16px;padding:16px;box-sizing:border-box}h1{font-size:1.35rem;margin:0 0 6px}p{margin:6px 0 12px;color:#b3c0d2;font-size:.92rem;line-height:1.4}.row{display:flex;justify-content:center;gap:18px;margin:10px 0;font-weight:700}button{border:0;border-radius:10px;padding:10px 16px;background:#70e1c1;color:#10201d;font-size:1rem;font-weight:750}#status{font-size:.85rem;color:#b3c0d2;margin-top:8px}a-scene{height:100dvh;width:100vw}
+</style>
+<script>
+AFRAME.registerComponent('vr-trainer', {
+  init() {
+    this.score=0; this.shots=0; this.running=false; this.left=30; this.timer=null;
+    this.scoreEl=document.querySelector('#score'); this.timeEl=document.querySelector('#time'); this.accEl=document.querySelector('#acc');
+    this.status=document.querySelector('#status'); this.panel=document.querySelector('#panel');
+    this.target=document.querySelector('#target');
+    this.target.addEventListener('click',()=>{if(!this.running)return;this.score++;this.shots++;this.update();this.moveTarget();});
+    this.el.sceneEl.addEventListener('click',e=>{if(this.running && e.target!==this.target && e.target.tagName!=='A-CURSOR'){this.shots++;this.update();}});
+    document.querySelector('#start').addEventListener('click',()=>this.start());
+    this.el.sceneEl.addEventListener('enter-vr',()=>{this.status.textContent='In VR: aim with a controller and press its trigger.';});
+    this.el.sceneEl.addEventListener('exit-vr',()=>{this.status.textContent='On desktop: aim with your mouse and click. In VR: use a controller trigger.';});
+  },
+  start(){this.score=0;this.shots=0;this.left=30;this.running=true;this.panel.style.display='none';this.update();this.moveTarget();clearInterval(this.timer);this.timer=setInterval(()=>{this.left--;this.update();if(this.left<=0)this.finish();},1000);},
+  moveTarget(){const x=(Math.random()*4.8-2.4).toFixed(2);const y=(Math.random()*2.2+1.1).toFixed(2);const z=(-3.8-Math.random()*1.5).toFixed(2);this.target.setAttribute('position',`${x} ${y} ${z}`);},
+  update(){this.scoreEl.textContent=this.score;this.timeEl.textContent=this.left;this.accEl.textContent=this.shots?`${Math.round(this.score/this.shots*100)}%`:'—';},
+  finish(){this.running=false;clearInterval(this.timer);this.panel.style.display='block';document.querySelector('#title').textContent='Round complete';document.querySelector('#copy').textContent=`You hit ${this.score} targets with ${this.shots?Math.round(this.score/this.shots*100):0}% accuracy.`;document.querySelector('#start').textContent='Play again';this.status.textContent='Round finished.';}
+});
+</script>
+</head>
+<body>
+<div id="panel"><h1 id="title">VR Aim Trainer</h1><p id="copy">A short target practice scene for WebXR headsets. Enter VR, then aim with a controller and press the trigger.</p><div class="row"><span>Time <b id="time">30</b>s</span><span>Hits <b id="score">0</b></span><span>Accuracy <b id="acc">—</b></span></div><button id="start">Start round</button><div id="status">On desktop: aim with your mouse and click. In VR: use a controller trigger.</div></div>
+<a-scene vr-trainer embedded background="color: #101722" renderer="colorManagement: true" cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+  <a-entity light="type: ambient; intensity: 1.1"></a-entity><a-entity light="type: directional; intensity: 1.2" position="-1 3 2"></a-entity>
+  <a-plane position="0 0 -4" rotation="-90 0 0" width="200" height="200" color="#182333"></a-plane>
+  <a-entity position="0 1.6 0"><a-camera wasd-controls-enabled="false"></a-camera><a-entity laser-controls="hand: right" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85"></a-entity><a-entity laser-controls="hand: left" cursor="rayOrigin: entity; fuse: false" raycaster="objects: .clickable" line="color: #70e1c1; opacity: 0.85"></a-entity></a-entity>
+  <a-entity id="target" class="clickable" geometry="primitive: sphere; radius: 0.24" material="color: #ff637c; emissive: #7c1e35; emissiveIntensity: 0.55" position="0 1.7 -4"></a-entity>
+  <a-entity position="0 3.4 -5"><a-text value="VR TARGET PRACTICE" align="center" color="#dce9f7" width="5"></a-text></a-entity>
+</a-scene>
+</body></html>
